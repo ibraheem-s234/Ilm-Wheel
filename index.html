@@ -1,0 +1,481 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flashcard Wheel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f6f4ef; --card:#ffffff; --ink:#1f2328; --muted:#6b7078; --line:#e3dfd6;
+  --accent:#1f6f5c; --accent-ink:#ffffff; --good:#2e7d32; --bad:#c62828;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#15181c; --card:#1e2227; --ink:#e8e6e1; --muted:#9aa0a8; --line:#2f343b;
+         --accent:#3fa58a; --accent-ink:#0d1512; --good:#66bb6a; --bad:#ef5350; }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Inter,system-ui,sans-serif}
+.wrap{max-width:760px;margin:0 auto;padding:16px}
+header{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+h1{font-size:1.35rem;margin:0}
+nav{display:flex;gap:6px}
+button,select,input,textarea{font:inherit;color:inherit}
+button{border:1px solid var(--line);background:var(--card);padding:8px 14px;border-radius:10px;cursor:pointer}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+button.good{background:var(--good);color:#fff;border-color:var(--good);font-weight:600}
+button.bad{background:var(--bad);color:#fff;border-color:var(--bad);font-weight:600}
+button.tab.active{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+button:disabled{opacity:.5;cursor:default}
+select,input,textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--card)}
+textarea{min-height:80px;resize:vertical}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-top:14px;overflow:hidden}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.row > *{flex:1 1 auto}
+.row > button{flex:0 0 auto}
+.muted{color:var(--muted);font-size:.9rem}
+.score{display:flex;gap:14px;font-weight:600}
+.score .g{color:var(--good)} .score .b{color:var(--bad)}
+.wheel-box{position:relative;width:min(100%,420px);aspect-ratio:1;margin:18px auto 8px}
+#wheel{width:100%;height:100%;border-radius:50%;transition:transform 4.2s cubic-bezier(.12,.75,.12,1)}
+.pointer{position:absolute;left:50%;top:-6px;transform:translateX(-50%);width:0;height:0;
+  border-left:16px solid transparent;border-right:16px solid transparent;border-top:28px solid var(--ink);z-index:2}
+.hub{position:absolute;inset:0;margin:auto;width:18%;height:18%;border-radius:50%;background:var(--card);
+  border:3px solid var(--ink);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.85rem}
+.center{text-align:center}
+.question{font-size:1.45rem;font-weight:700;margin:6px 0 12px;white-space:pre-wrap}
+.answer .ar{font-family:"Amiri","Noto Naskh Arabic","Traditional Arabic",serif;font-size:1.4em;line-height:1.9;margin:4px 0}
+.answer{white-space:pre-wrap;border-left:4px solid var(--accent);padding:8px 12px;background:var(--bg);border-radius:8px}
+.yours{white-space:pre-wrap;color:var(--muted);margin-bottom:8px}
+/* Arabic: auto direction + proper font */
+[dir=auto], .bidi{unicode-bidi:plaintext;text-align:start}
+.question, .answer, .yours, .cq, .ca, textarea{font-family:Inter,"Amiri","Noto Naskh Arabic","Traditional Arabic",system-ui,sans-serif}
+.cards{list-style:none;padding:0;margin:10px 0 0}
+.cards li{border-top:1px solid var(--line);padding:10px 0}
+.cq{font-weight:600;white-space:pre-wrap}
+.ca{white-space:pre-wrap;color:var(--muted);font-size:.92rem;max-height:6.5em;overflow:hidden}
+.pill{display:inline-block;font-size:.75rem;padding:1px 8px;border-radius:99px;border:1px solid var(--line);color:var(--muted)}
+.hidden{display:none !important}
+label{display:block;font-weight:600;margin:10px 0 4px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>🎡 Flashcard Wheel</h1>
+    <nav>
+      <button class="tab active" data-tab="spin">Spin</button>
+      <button class="tab" data-tab="manage">Cards</button>
+      <button class="tab" data-tab="data">Import / Backup</button>
+    </nav>
+  </header>
+
+  <!-- SPIN -->
+  <section id="tab-spin">
+    <div class="panel">
+      <div class="row">
+        <select id="deckSelect" aria-label="Deck"></select>
+      </div>
+      <div class="row" style="margin-top:10px;justify-content:space-between">
+        <div class="score"><span class="g">✅ <span id="sGood">0</span></span><span class="b">❌ <span id="sBad">0</span></span><span id="sPct" class="muted"></span></div>
+        <button id="resetScore" style="flex:0 0 auto">Reset score</button>
+      </div>
+      <div class="wheel-box">
+        <div class="pointer"></div>
+        <canvas id="wheel" width="840" height="840"></canvas>
+        <div class="hub" id="hub">SPIN</div>
+      </div>
+      <p class="muted center" id="wheelNote"></p>
+      <div class="center"><button class="primary" id="spinBtn" style="padding:12px 40px;font-size:1.1rem">Spin</button></div>
+    </div>
+
+    <div class="panel hidden" id="qPanel">
+      <div class="muted" id="qMeta"></div>
+      <div class="question bidi" id="qText" dir="auto"></div>
+      <textarea id="myAnswer" dir="auto" placeholder="Type your answer (optional), then press Reveal"></textarea>
+      <div class="row" style="margin-top:10px"><button class="primary" id="revealBtn">Reveal answer</button></div>
+      <div id="revealBox" class="hidden" style="margin-top:12px">
+        <div class="yours bidi" id="yourAns" dir="auto"></div>
+        <div class="answer bidi" id="aText" dir="auto"></div>
+        <div class="row" style="margin-top:12px">
+          <button class="good" id="gotBtn">✅ Got it</button>
+          <button class="bad" id="missBtn">❌ Missed</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MANAGE -->
+  <section id="tab-manage" class="hidden">
+    <div class="panel">
+      <label for="mDeck">Deck</label>
+      <div class="row">
+        <select id="mDeck"></select>
+        <button id="newDeck">+ New deck</button>
+        <button id="renameDeck">Rename</button>
+        <button id="delDeck">Delete</button>
+      </div>
+    </div>
+    <div class="panel">
+      <strong id="formTitle">Add a card</strong>
+      <label for="fQ">Question</label>
+      <textarea id="fQ" dir="auto"></textarea>
+      <label for="fA">Answer</label>
+      <textarea id="fA" dir="auto"></textarea>
+      <div class="row" style="margin-top:10px">
+        <button class="primary" id="saveCard">Add card</button>
+        <button id="cancelEdit" class="hidden">Cancel edit</button>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="row"><input id="search" placeholder="Search cards…" dir="auto"></div>
+      <div class="muted" id="cardCount" style="margin-top:8px"></div>
+      <ul class="cards" id="cardList"></ul>
+    </div>
+  </section>
+
+  <!-- DATA -->
+  <section id="tab-data" class="hidden">
+    <div class="panel">
+      <strong>Import Obsidian flashcard files (.md)</strong>
+      <p class="muted">Reads Spaced Repetition format: <code>Question :: Answer</code> and multi-line cards with a <code>?</code> line. Each file becomes its own deck (named after the file), unless you pick a deck below.</p>
+      <label for="impDeck">Put cards into</label>
+      <select id="impDeck"></select>
+      <input type="file" id="mdFiles" accept=".md,.txt,text/markdown,text/plain" multiple style="margin-top:10px">
+      <p class="muted" id="impMsg"></p>
+    </div>
+    <div class="panel">
+      <strong>Backup &amp; move between devices</strong>
+      <p class="muted">Cards are saved in this browser on this device. To move them to your phone (or keep a backup), download a backup here and restore it on the other device.</p>
+      <div class="row">
+        <button id="exportBtn">⬇ Download backup</button>
+        <label class="muted" style="font-weight:400;margin:0">Restore backup: <input type="file" id="restoreFile" accept=".json,application/json"></label>
+      </div>
+      <p class="muted" id="bkMsg"></p>
+    </div>
+    <div class="panel">
+      <strong>Reset</strong>
+      <div class="row" style="margin-top:8px">
+        <button id="resetProgress">Reset missed/got progress</button>
+        <button id="restoreStarter">Restore starter decks</button>
+      </div>
+      <p class="muted" id="rsMsg"></p>
+    </div>
+  </section>
+</div>
+
+<script>
+(function(){
+"use strict";
+const KEY = "flashcardWheel.v1";
+const STARTER = [{"name": "Aqeedah (The Ha'iyyah)", "cards": [{"q": "What is the main reason for division in the religion?", "a": "Innovation (bidʿah) is the main reason for division in the religion."}, {"q": "What are the two types of guidance?", "a": "1. Hidāyat al-irshād (guidance of direction): showing the path. It does not mean the person will definitely be guided. The Prophet ﷺ and the callers have this.\nوَإِنَّكَ لَتَهْدِي إِلَىٰ صِرَاطٍ مُّسْتَقِيمٍ\n\"And indeed, you guide to a straight path.\" (ash-Shura 42:52)\n2. Hidāyat at-tawfīq (guidance of success): actually being guided and following the path. Only Allah سبحانه وتعالى can give this.\nإِنَّكَ لَا تَهْدِي مَنْ أَحْبَبْتَ وَلٰكِنَّ اللّٰهَ يَهْدِي مَن يَشَاءُ\n\"Indeed, you do not guide whom you love, but Allah guides whom He wills.\" (al-Qasas 28:56)"}, {"q": "What are the three types of bidʿah?", "a": "1. Iʿtiqādiyyah (in belief), e.g. saying the Qur'an is created.\n2. Qawliyyah (in sayings), e.g. saying your intention out loud.\n3. ʿAmaliyyah (in actions), e.g. visiting graves specifically on ʿEid."}, {"q": "What is our purpose? Give the ayah.", "a": "وَمَا خَلَقْتُ الْجِنَّ وَالْإِنسَ إِلَّا لِيَعْبُدُونِ\n\"And I did not create the jinn and mankind except to worship Me.\" (adh-Dhariyat 51:56)"}, {"q": "How do you refute those who reject hadith? What is the proof that we must follow the Prophet ﷺ?", "a": "قُلْ إِن كُنتُمْ تُحِبُّونَ اللّٰهَ فَاتَّبِعُونِي يُحْبِبْكُمُ اللّٰهُ وَيَغْفِرْ لَكُمْ ذُنُوبَكُمْ ۗ وَاللّٰهُ غَفُورٌ رَّحِيمٌ\n\"Say, [O Muhammad], 'If you love Allah, then follow me; Allah will love you and forgive you your sins. And Allah is Forgiving and Merciful.'\" (Āl ʿImrān 3:31)\nFollowing the Prophet ﷺ is only possible through his Sunnah, which reaches us through the hadith."}, {"q": "What is the definition of taqwa according to Ibn al-Qayyim?", "a": "In ar-Risālah at-Tabūkiyyah (pp. 9–10), Ibn al-Qayyim explains that the reality of taqwa is acting in obedience to Allah out of iman and seeking His reward (īmānan wa iḥtisāban): doing what He commanded and leaving what He forbade.\nEvery action has a source and a goal. An act of worship only brings you closer to Allah سبحانه وتعالى when its source is iman (belief) and its goal is Allah's reward."}, {"q": "What is the difference between the creation and the command? How did Imam Ahmad refute those who deny that Allah speaks?", "a": "The creation (al-khalq) is created; the command (al-amr) is the uncreated speech of Allah سبحانه وتعالى.\nأَلَا لَهُ الْخَلْقُ وَالْأَمْرُ ۗ تَبَارَكَ اللّٰهُ رَبُّ الْعَالَمِينَ\n\"Unquestionably, His is the creation and the command. Blessed is Allah, Lord of the worlds.\" (al-Aʿraf 7:54)\nSome say you need a mouth to speak. Imam Ahmad answered that Allah tells us our hands will speak and our feet will testify. Do hands have mouths?\nالْيَوْمَ نَخْتِمُ عَلَىٰ أَفْوَاهِهِمْ وَتُكَلِّمُنَا أَيْدِيهِمْ وَتَشْهَدُ أَرْجُلُهُم بِمَا كَانُوا يَكْسِبُونَ\n\"That Day, We will seal over their mouths, and their hands will speak to Us, and their feet will testify about what they used to earn.\" (Ya-Sin 36:65)"}, {"q": "What is the proof that Allah spoke to Musa عليه السلام with direct speech?", "a": "وَكَلَّمَ اللّٰهُ مُوسَىٰ تَكْلِيمًا\n\"And Allah spoke to Musa with [direct] speech.\" (an-Nisaʾ 4:164)"}]}, {"name": "Book of Hajj - The Path of The Wayfarers", "cards": []}, {"name": "Forty Hadeeth of Imam An-Nawawi", "cards": []}, {"name": "Fundamentals of Fiqh (Al-Waraqat)", "cards": []}, {"name": "Hadith Science (The Bayquniyyah)", "cards": []}, {"name": "Principles of Tafseer", "cards": []}, {"name": "Q&A", "cards": []}, {"name": "Ramadan Dawrah 2025", "cards": []}, {"name": "The Essence of Tafsir", "cards": []}, {"name": "The Important Lessons For Every Muslim", "cards": [{"q": "What are the two pillars of lā ilāha illā Allāh?", "a": "1. Negation (an-nafy): negating the worship of everything other than Allah.\n2. Affirmation (al-ithbāt): affirming that worship belongs to Allah alone. He is the only deity worthy of worship."}, {"q": "What are the conditions of lā ilāha illā Allāh?", "a": "1. ʿIlm (knowledge), which negates ignorance.\n2. Yaqīn (certainty), which negates doubt. Waswas does not break certainty: being troubled by waswas is a sign that you have iman.\n3. Ikhlāṣ (sincerity), which negates shirk. Riyāʾ (showing off) is minor shirk and a major sin, and it can lead to complete disbelief.\n4. Ṣidq (truthfulness), which negates lying.\n5. Maḥabbah (love), which negates hatred.\n6. Inqiyād (submission), which negates abandoning it.\n7. Qabūl (acceptance), which negates rejection.\n8. Kufr (disbelief) in everything worshipped besides Allah. This one is sometimes not listed because it is included in sincerity."}, {"q": "What does Muḥammad Rasūl Allāh entail?", "a": "1. Believing in everything he ﷺ conveyed.\n2. Obeying him in everything he commanded.\n3. Staying far away from everything he forbade and warned against.\n4. Worshipping Allah only with what Allah عز وجل and His Messenger ﷺ legislated."}, {"q": "What does lā ilāha illā Allāh mean?", "a": "لَا إِلٰهَ إِلَّا اللّٰهُ\nThere is no deity worthy of worship except Allah."}, {"q": "How is the shahadah reflected in a person?", "a": "Lā ilāha illā Allāh is belief in the heart, saying with the tongue, and action with the limbs.\nBeing an ʿabd of Allah: ʿabd literally means slave, but it is not low like the English word. To be an ʿabd of Allah is a high status, and the Prophet Muhammad ﷺ is the highest ʿabd."}, {"q": "What are the six pillars of iman?", "a": "أَنْ تُؤْمِنَ بِاللّٰهِ، وَمَلَائِكَتِهِ، وَكُتُبِهِ، وَرُسُلِهِ، وَالْيَوْمِ الْآخِرِ، وَتُؤْمِنَ بِالْقَدَرِ خَيْرِهِ وَشَرِّهِ\n\"That you believe in Allah, His angels, His books, His messengers, the Last Day, and that you believe in al-Qadar, the good of it and the bad of it.\" (Hadith of Jibril, Muslim 8)\n1. Allah\n2. His angels\n3. His books\n4. His messengers. The Ulul-ʿAzm are Muhammad ﷺ, Ibrahim, Musa, ʿIsa and Nuh عليهم السلام (see 46:35: فَاصْبِرْ كَمَا صَبَرَ أُولُو الْعَزْمِ مِنَ الرُّسُلِ).\n5. The Last Day: everything after death, including the grave, the Weighing and the Sirat.\n6. Al-Qadar (divine decree), the good of it and the bad of it."}, {"q": "What are the three types of Tawhid?", "a": "1. Tawhid ar-Rububiyyah (Lordship): singling out Allah in His actions, such as creating, providing, and sustaining the heavens and earth. Only He is capable of this. It is to believe that Allah is the Manager of everything, with no partner.\n2. Tawhid al-Uluhiyyah (Worship): all acts of worship, such as salah and sawm, must be done sincerely for Allah alone. No act of worship may be directed to other than Allah.\n3. Tawhid al-Asmaʾ waṣ-Ṣifat (Names and Attributes): believing in every Name and Attribute of Allah in the Qur'an and the authentic hadith, affirming them in a way befitting Him, without:\n- taḥrīf (distorting their meaning)\n- taʿṭīl (denying them)\n- takyīf (specifying how they are)\n- tamthīl (likening them to the creation)\nلَيْسَ كَمِثْلِهِ شَيْءٌ ۖ وَهُوَ السَّمِيعُ الْبَصِيرُ\n\"There is nothing like unto Him, and He is the All-Hearing, the All-Seeing.\" (ash-Shura 42:11)"}, {"q": "What is major shirk?", "a": "Shirk that destroys all of one's good deeds and leads to eternal punishment if one dies without repenting.\nوَلَوْ أَشْرَكُوا لَحَبِطَ عَنْهُم مَّا كَانُوا يَعْمَلُونَ\n\"But if they had associated others with Allah, then worthless for them would be whatever they were doing.\" (al-Anʿam 6:88)\nإِنَّ اللّٰهَ لَا يَغْفِرُ أَن يُشْرَكَ بِهِ وَيَغْفِرُ مَا دُونَ ذٰلِكَ لِمَن يَشَاءُ\n\"Indeed, Allah does not forgive that partners be associated with Him, but He forgives what is less than that for whom He wills.\" (an-Nisaʾ 4:48)\nMuhammad ibn ʿAbd al-Wahhab: just as salah is not salah without purification, worship is not worship without Tawhid.\nExamples: making duʿaʾ to the dead or to idols, and seeking their aid (istighāthah) in hardship."}, {"q": "What is minor shirk?", "a": "What the texts of the Qur'an and Sunnah call shirk, but which is not major shirk. It does not take one out of Islam, but it negates the completeness of obligatory Tawhid.\nExamples: riyāʾ (showing off), and swearing by other than Allah.\nإِنَّ أَخْوَفَ مَا أَخَافُ عَلَيْكُمُ الشِّرْكُ الْأَصْغَرُ ... الرِّيَاءُ\n\"The thing I fear most for you is minor shirk.\" They asked what minor shirk is, and he ﷺ said: \"Riyāʾ.\" (Musnad Ahmad 23630, from Maḥmūd ibn Labīd; graded ṣaḥīḥ by al-Albānī)\nمَنْ حَلَفَ بِغَيْرِ اللّٰهِ فَقَدْ كَفَرَ أَوْ أَشْرَكَ\n\"Whoever swears by other than Allah has committed kufr or shirk.\" (Tirmidhi 1535, Abu Dawud 3251)"}, {"q": "What is hidden shirk?", "a": "Shirk where the heart differs from the outward action. It can be minor or major.\nExample: someone who stands to pray and beautifies his prayer because he sees people watching him.\nالشِّرْكُ الْخَفِيُّ، أَنْ يَقُومَ الرَّجُلُ يُصَلِّي فَيُزَيِّنُ صَلَاتَهُ لِمَا يَرَى مِنْ نَظَرِ رَجُلٍ\n\"Hidden shirk: that a man stands to pray and beautifies his prayer because he sees someone looking at him.\" (Ibn Majah 4204, from Abu Saʿid al-Khudri; graded ḥasan by al-Albānī)"}, {"q": "What is the order of sins, from least to most serious?", "a": "Minor sins → major sins → bidʿah → minor shirk → major shirk."}, {"q": "What is the pillar of Ihsan?", "a": "أَنْ تَعْبُدَ اللّٰهَ كَأَنَّكَ تَرَاهُ، فَإِنْ لَمْ تَكُنْ تَرَاهُ فَإِنَّهُ يَرَاكَ\n\"That you worship Allah as if you see Him, and if you do not see Him, then indeed He sees you.\" (Hadith of Jibril, Bukhari 50, Muslim 8)"}, {"q": "What is the difference between a condition, a pillar and an obligation?", "a": "Condition (sharṭ): comes before and outside the act of worship and continues through it until it ends. It cannot be mended with sujud as-sahw.\nPillar (rukn): the same, but only within the act, not before it. It cannot be mended with sujud as-sahw.\nObligation (wājib): within the act of worship. If forgotten, it can be mended with sujud as-sahw."}, {"q": "What are the conditions (shurūṭ) of the salah?", "a": "1. Islam\n2. Sanity (al-ʿaql)\n3. Tamyīz: the age at which a child can tell good from bad. Some scholars say it is age 7.\n4. Removing ḥadath. Minor ḥadath requires wudu; major ḥadath (janābah) requires ghusl.\n5. Removing najāsah (physical impurity) from your clothes, your body and the place you pray on. Scholars sometimes combine this and #4 as ṭahārah (purification).\n6. Covering the ʿawrah\n7. The entrance of the prayer's time\n8. Facing the qiblah\n9. Intention (an-niyyah)"}, {"q": "What are the 14 pillars (arkān) of the salah?", "a": "1. Standing (qiyām), if able\n2. Takbīrat al-iḥrām (the opening takbir)\n3. Reciting al-Fātiḥah\n4. Rukūʿ (bowing)\n5. Standing straight after rukūʿ\n6. Sujūd on the seven limbs: the forehead with the nose, the two hands, the two knees and the two feet. \"I have been commanded to prostrate on seven bones\" (أُمِرْتُ أَنْ أَسْجُدَ عَلَى سَبْعَةِ أَعْظُمٍ, Bukhari 812, Muslim 490)\n7. Rising from sujūd\n8. Sitting between the two prostrations\n9. Ṭumaʾnīnah (tranquillity) in every position. This includes coming to the prayer calmly: if you are late, do not run; pray what you catch and complete what you missed. (Bukhari 636, Muslim 602)\n10. Doing the pillars in order\n11. The final tashahhud\n12. Sitting for the final tashahhud\n13. Sending ṣalāh upon the Prophet ﷺ (Allāhumma ṣalli ʿalā Muḥammad...)\n14. The two taslims"}, {"q": "What are the 8 obligations (wājibāt) of the salah?", "a": "1. All the takbirs except takbīrat al-iḥrām, which is a pillar.\n2. سَمِعَ اللّٰهُ لِمَنْ حَمِدَهُ \"Allah hears the one who praises Him.\" Said by the imam and the one praying alone.\n3. رَبَّنَا وَلَكَ الْحَمْدُ \"Our Lord, to You belongs all praise.\" Said by everyone.\n4. سُبْحَانَ رَبِّيَ الْعَظِيمِ \"Glory be to my Lord, the Most Great.\" Said in rukūʿ.\n5. سُبْحَانَ رَبِّيَ الْأَعْلَى \"Glory be to my Lord, the Most High.\" Said in sujūd.\n6. رَبِّ اغْفِرْ لِي \"My Lord, forgive me.\" Said between the two prostrations.\n7. The first tashahhud\n8. Sitting for the first tashahhud"}, {"q": "What are the sunnah (recommended) acts of the salah?", "a": "1. The opening duʿāʾ (al-istiftāḥ)\n2. Placing the right hand over the left on the chest while standing, before and after rukūʿ\n3. Raising both hands, fingers slightly apart, level with the shoulders or ears: at the first takbir, going into rukūʿ, rising from rukūʿ, and standing for the third rakʿah\n4. Saying the tasbīḥ more than once in rukūʿ and sujūd\n5. Saying more than \"Rabbanā wa laka al-ḥamd\" after rukūʿ, and asking forgiveness more than once between the two prostrations\n6. Keeping the head level with the back in rukūʿ\n7. In sujūd, keeping the elbows away from the sides, the belly from the thighs, and the thighs from the calves\n8. Raising the forearms off the ground in sujūd\n9. Sitting on the left foot laid flat with the right foot upright, in the first tashahhud and between the two prostrations\n10. In the last tashahhud of a 3 or 4 rakʿah prayer, sitting on the ground with the left foot under the right leg and the right foot upright\n11. Pointing with the index finger in the tashahhud from when one sits until its end, and moving it when making duʿāʾ\n12. Sending ṣalāh upon the Prophet ﷺ and his family, and Ibrahim and his family, in the first tashahhud\n13. Making duʿāʾ at the end of the last tashahhud\n14. Reciting aloud in Fajr, Jumuʿah, ʿEid, the prayer for rain, and the first two rakʿahs of Maghrib and ʿIshāʾ\n15. Reciting quietly in Dhuhr, ʿAsr, the third rakʿah of Maghrib, and the last two rakʿahs of ʿIshāʾ\n16. Reciting ayat or a surah after al-Fātiḥah"}, {"q": "What are the nullifiers (nawāqiḍ) of the salah?", "a": "1. Speaking intentionally while remembering and knowing. Speaking out of forgetfulness or ignorance does not invalidate the prayer.\n2. Laughing. It is an attack from Shaytan, and salah time is khushūʿ time. Those not praying must not provoke someone who is praying; if you see someone doing that, tell them to stop immediately.\n3. Eating. If something is stuck between your teeth, just swallow it; that does not break the prayer, but chewing does.\n4. Drinking\n5. Exposing the ʿawrah\n6. Turning far away from the qiblah\n7. Continuous unnecessary movement. If your phone rings, silence it; that is a necessary movement. Some scholars say three continuous movements break the salah.\n8. Breaking wudu"}, {"q": "What are the conditions of wudu?", "a": "1. Islam\n2. Sanity (al-ʿaql)\n3. Tamyīz\n4. Intention (an-niyyah)\n5. Continuing the intention until the wudu is complete. If you change your intention to something else, you must redo the wudu. Someone with waswas has not broken their intention; it is whispers from Shaytan.\n6. The ceasing of whatever nullifies wudu\n7. Cleaning the private parts after using the toilet, with water or clean dry objects (at least three wipes). Water is best.\n8. Water that is pure and permissible. Wudu with stolen water is valid, but the person has sinned.\n9. Removing anything that stops water reaching the skin. Nail polish must be removed, because water cannot reach the nail.\n10. The prayer time having entered, for someone whose wudu breaks continuously (e.g. constant urine or bleeding). They make wudu after the time enters, pray, and disregard what happens during the salah."}, {"q": "What are the obligatory acts of wudu?", "a": "فَاغْسِلُوا وُجُوهَكُمْ وَأَيْدِيَكُمْ إِلَى الْمَرَافِقِ وَامْسَحُوا بِرُءُوسِكُمْ وَأَرْجُلَكُمْ إِلَى الْكَعْبَيْنِ\n\"Wash your faces and your forearms to the elbows, wipe over your heads, and wash your feet to the ankles.\" (al-Maʾidah 5:6)\n1. Washing the face, which includes rinsing the mouth (maḍmaḍah) and sniffing water into the nose (istinshāq). Some scholars say these two are only sunnah. Use one scoop for both.\n2. Washing the arms from the fingertips up to and including the elbows\n3. Wiping (masḥ) the whole head, including the ears\n4. Washing the feet, including the ankles\n5. Washing the parts in order (there is a difference of opinion between the madhhabs on this)\n6. Continuity (muwālāh)\nSunnah: start with the right before the left; wipe the head once and wash the other parts three times.\nThere is also a difference of opinion between the madhhabs on whether intention is required. Some scholars say \"washing\" means the water has to flow."}, {"q": "What are the nullifiers of wudu?", "a": "1. Whatever exits from the two private parts\n2. Impure substances exiting from other parts of the body. Vomiting does not nullify wudu.\n3. Losing consciousness through sleep or otherwise (including drugs, alcohol and anaesthesia). It is not the sleep itself, but that you are not in control and may pass wind without knowing.\n4. Touching the private parts, front or back, without a barrier\n5. Eating camel meat. أَنَتَوَضَّأُ مِنْ لُحُومِ الْإِبِلِ؟ قَالَ: نَعَمْ \"Should we make wudu after eating camel meat?\" He said: \"Yes.\" (Muslim 360)\n6. Leaving Islam\nThere is a lot of difference of opinion between the madhhabs on these.\nWashing a dead body: the correct opinion (most scholars) is that it does not nullify wudu, as there is no evidence for it. But if the washer touches the deceased's private parts without a barrier, wudu is required, and they must only be touched behind a barrier.\nTouching a woman does not nullify wudu, with or without desire, according to the correct opinion, as long as nothing exits. The Prophet ﷺ kissed one of his wives and went out to pray without making wudu (Abu Dawud 179, Tirmidhi 86). This is also a difference of opinion."}, {"q": "What is the best of manners?", "a": "Tawhid is the best of manners, because Allah is the most deserving of our good manners."}, {"q": "What are the seven destructive sins?", "a": "اجْتَنِبُوا السَّبْعَ الْمُوبِقَاتِ: الشِّرْكُ بِاللّٰهِ، وَالسِّحْرُ، وَقَتْلُ النَّفْسِ الَّتِي حَرَّمَ اللّٰهُ إِلَّا بِالْحَقِّ، وَأَكْلُ الرِّبَا، وَأَكْلُ مَالِ الْيَتِيمِ، وَالتَّوَلِّي يَوْمَ الزَّحْفِ، وَقَذْفُ الْمُحْصَنَاتِ الْمُؤْمِنَاتِ الْغَافِلَاتِ\n\"Avoid the seven destructive sins: shirk, magic, killing a soul Allah has forbidden except by right, consuming riba (interest), consuming the orphan's wealth, fleeing on the day of battle, and slandering chaste, innocent believing women.\" (Bukhari 2766, Muslim 89)"}]}, {"name": "The Path of the Wayfarers (Manhaj As Salikeen)", "cards": [{"q": "What are the five aḥkām at-taklīfiyyah (degrees of rulings)?", "a": "1. Al-Wājib: what the Shāriʿ obligated. You are rewarded for doing it with intention, and you deserve punishment for leaving it (deserve, because punishment is not certain; Allah may forgive). The Hanafis distinguish between farḍ and wājib; the majority treat them as the same.\n2. Al-Ḥarām: what the Shāriʿ prohibited. You deserve punishment for doing it, and are rewarded for avoiding it.\n3. Al-Makrūh: what the Shāriʿ asked to be left, not in a binding way. You are rewarded for avoiding it.\n4. Al-Mandūb / al-Masnūn / al-Mustaḥabb: what the Shāriʿ recommended. You are rewarded for doing it.\n5. Al-Mubāḥ: what has no command or prohibition attached to it. There is no reward or punishment."}, {"q": "How is the ruling (the madhhab position) determined in the Hanbali madhhab?", "a": "1. The saying of Imam Ahmad\n2. The saying of the majority of the Hanbali fuqahāʾ\n3. The saying with the stronger evidence (dalīl)"}, {"q": "What is khilāf al-awlā?", "a": "Leaving an emphasised sunnah (sunnah muʾakkadah) is makrūh. Leaving any other sunnah is khilāf al-awlā: going against what should have been given priority."}, {"q": "What are the five pillars of Islam? (with the hadith)", "a": "بُنِيَ الْإِسْلَامُ عَلَى خَمْسٍ: شَهَادَةِ أَنْ لَا إِلٰهَ إِلَّا اللّٰهُ وَأَنَّ مُحَمَّدًا رَسُولُ اللّٰهِ، وَإِقَامِ الصَّلَاةِ، وَإِيتَاءِ الزَّكَاةِ، وَالْحَجِّ، وَصَوْمِ رَمَضَانَ\n\"Islam is built on five: testifying that there is no deity worthy of worship except Allah and that Muhammad is the Messenger of Allah, establishing the salah, paying the zakah, Hajj, and fasting Ramadan.\" (Bukhari 8, Muslim 16; agreed upon)"}, {"q": "Can you add to Islam?", "a": "No. There is not a single part of Islam that has not been made clear. The principle in worship is that it is forbidden until there is evidence for it from the Qur'an and Sunnah. For example, you cannot pray 25 rakʿahs in a row with 13 tashahhuds, or change zakah to 1%.\nالْيَوْمَ أَكْمَلْتُ لَكُمْ دِينَكُمْ\n\"This day I have perfected for you your religion.\" (al-Maʾidah 5:3)\nمَنْ أَحْدَثَ فِي أَمْرِنَا هٰذَا مَا لَيْسَ مِنْهُ فَهُوَ رَدٌّ\n\"Whoever introduces into this matter of ours something that is not from it, it is rejected.\" (Bukhari 2697, Muslim 1718)\nAs for worldly matters, everything is permissible by default unless proven ḥarām."}, {"q": "What are the types of purity?", "a": "1. Spiritual purity (ṭahārah maʿnawiyyah): being pure from shirk (major and minor), bidʿah and sins.\n2. Physical purity (ṭahārah ḥissiyyah), which is of two kinds: purity from ḥadath and purity from khabath (najāsah)."}, {"q": "What is ḥadath?", "a": "A state (a description) affecting the body that prevents salah and any worship requiring purity. Example: a man passes wind, so he cannot pray.\nIt is removed by wudu, ghusl, or tayammum."}, {"q": "What is khabath?", "a": "Khabath (najāsah) is physical impurity that we must purify ourselves from, e.g. urine and faeces.\nPurification from it is done by removing the impurity."}, {"q": "What are the ten sunan al-fiṭrah?", "a": "عَشْرٌ مِنَ الْفِطْرَةِ\n\"Ten things are from the fiṭrah...\" (Muslim 261, from ʿAʾishah; circumcision is in the hadith \"Five are from the fiṭrah\", Bukhari 5889, Muslim 257)\n1. Al-khitān (circumcision): obligatory for men, not obligatory for women. (Related: if the circumcised parts meet in intercourse, ghusl becomes obligatory even without ejaculation.)\n2. Qaṣṣ ash-shārib (trimming the moustache): trim it so the upper lip shows. Shaving it is disliked; Imam Malik considered that a disfigurement.\n3. Cutting the nails\n4. Removing armpit hair: plucking it, or a razor if plucking is too painful\n5. Ḥalq al-ʿānah (removing pubic hair): the overwhelming majority say the front only; some say front and back. Any method may be used.\nNumbers 2 to 5 should not be left more than 40 nights (Muslim 258).\n6. Iʿfāʾ al-liḥyah (letting the beard grow): obligatory for men. وَفِّرُوا اللِّحَى، وَأَحْفُوا الشَّوَارِبَ \"Let the beards grow and trim the moustaches.\" (Bukhari 5892, Muslim 259)\n7. Siwāk: sunnah at all times, and emphasised at wudu, at salah, on entering the house, when reciting Qur'an, on waking from deep sleep, before death, when the smell of the mouth changes, when making dhikr, after a long silence, and when the teeth are discoloured. (Bukhari 887, Muslim 252)\n8. Istinshāq (sniffing water into the nose)\n9. Washing the finger joints (al-barājim)\n10. Washing the private parts with water after using the toilet"}, {"q": "What is the ruling on water that falls from the sky or springs from the earth?", "a": "All of it is pure (ṭahūr). Water stays pure as long as its smell, colour or taste has not been changed by an impurity.\nIf one of its characteristics is changed by an impurity, it becomes najis, whether the water is a lot or a little (scholars report consensus on this).\nإِنَّ الْمَاءَ طَهُورٌ لَا يُنَجِّسُهُ شَيْءٌ\n\"Water is pure; nothing makes it impure.\" (Abu Dawud 66, Tirmidhi 66)"}, {"q": "What is the proof that everything of this world is allowed unless forbidden?", "a": "هُوَ الَّذِي خَلَقَ لَكُم مَّا فِي الْأَرْضِ جَمِيعًا\n\"It is He who created for you all that is on the earth.\" (al-Baqarah 2:29)"}, {"q": "What is the ruling on vessels of gold and silver?", "a": "All vessels are permissible except those of gold and silver, or containing some of them, apart from a small amount of silver used for a need (the Prophet's ﷺ cup was mended with silver, Bukhari, from Anas).\nلَا تَشْرَبُوا فِي آنِيَةِ الذَّهَبِ وَالْفِضَّةِ، وَلَا تَأْكُلُوا فِي صِحَافِهَا، فَإِنَّهَا لَهُمْ فِي الدُّنْيَا وَلَكُمْ فِي الْآخِرَةِ\n\"Do not drink from vessels of gold and silver, and do not eat from their plates, for they are for them (the disbelievers) in this world and for you in the Hereafter.\" (Bukhari 5426, Muslim 2067)"}, {"q": "What is the duʿāʾ for entering the toilet?", "a": "بِسْمِ اللّٰهِ، اللّٰهُمَّ إِنِّي أَعُوذُ بِكَ مِنَ الْخُبُثِ وَالْخَبَائِثِ\n\"In the name of Allah. O Allah, I seek refuge in You from the male and female devils.\" (Bukhari 142, Muslim 375; \"Bismillāh\" at the start comes in other narrations)"}, {"q": "What is the duʿāʾ for leaving the toilet?", "a": "غُفْرَانَكَ\n\"(I ask for) Your forgiveness.\" (Abu Dawud 30, Tirmidhi 7)"}, {"q": "Where is it ḥarām to relieve yourself?", "a": "- On roads and paths that people use\n- In places where people sit or take shade\n- Under fruit-bearing trees\n- Any place where it would harm people\nاتَّقُوا اللَّعَّانَيْنِ ... الَّذِي يَتَخَلَّى فِي طَرِيقِ النَّاسِ أَوْ فِي ظِلِّهِمْ\n\"Beware of the two things that bring curses: relieving oneself on people's paths or in their shade.\" (Muslim 269)"}, {"q": "How does one sit when relieving oneself (as taught in the madhhab)?", "a": "Lean on the left leg and keep the right leg raised."}, {"q": "How is istinjāʾ / istijmār done?", "a": "After relieving oneself, either do istijmār with three stones (or something similar that cleans), or do istinjāʾ with water. Either one alone is sufficient.\nDo not use dung or bones, since the Prophet ﷺ forbade it, nor anything that has sanctity.\nWater is the original means of purification when available; the substitute is weaker than the original.\n\"He forbade us from cleaning ourselves with fewer than three stones, or with dung or bone.\" (Muslim 262, from Salmān)"}, {"q": "How should ijmāʿ (consensus) be understood?", "a": "Ijmāʿ is not evidence by itself. It indicates that there is evidence for the ruling, even if that evidence did not reach us."}, {"q": "True or false: facing or turning your back to the qiblah when relieving yourself is ḥarām.", "a": "Partly true.\n- In the open, with no building or barrier (e.g. behind a bush): ḥarām.\n- Inside a building with a toilet: not ḥarām; makrūh, as taught in class.\nإِذَا أَتَيْتُمُ الْغَائِطَ فَلَا تَسْتَقْبِلُوا الْقِبْلَةَ وَلَا تَسْتَدْبِرُوهَا\n\"When you go to relieve yourselves, do not face the qiblah or turn your backs to it.\" (Bukhari 394, Muslim 264)\nIbn ʿUmar saw the Prophet ﷺ relieving himself inside a house with his back to the Kaʿbah (Bukhari 148, Muslim 266).\nScholars differ: some apply it only to urination, some only to defecation, some only to turning the back, and some only to facing it."}, {"q": "Can you urinate standing?", "a": "Yes, it is permissible if no one can see your ʿawrah, there is a need, and the urine does not splash back onto you.\nThe Prophet ﷺ came to a rubbish heap of some people and urinated standing. (Bukhari 224, Muslim 273, from Ḥudhayfah)"}, {"q": "What is the proof that water is pure?", "a": "وَهُوَ الَّذِي أَرْسَلَ الرِّيَاحَ بُشْرًا بَيْنَ يَدَيْ رَحْمَتِهِ ۚ وَأَنزَلْنَا مِنَ السَّمَاءِ مَاءً طَهُورًا\n\"And it is He who sends the winds as good tidings before His mercy, and We send down from the sky pure water.\" (al-Furqan 25:48)"}, {"q": "How do you wash off an impurity?", "a": "Whether it is on the body, clothes, a spot or elsewhere, it is enough to remove the impurity itself from its place. The Shariʿah did not set a number of washes, except for a dog's saliva: seven washes, one of them (the first) with earth or sand.\nطُهُورُ إِنَاءِ أَحَدِكُمْ إِذَا وَلَغَ فِيهِ الْكَلْبُ أَنْ يَغْسِلَهُ سَبْعَ مَرَّاتٍ أُولَاهُنَّ بِالتُّرَابِ\n\"The purification of your vessel, if a dog licks from it, is to wash it seven times, the first with earth.\" (Muslim 279)"}, {"q": "What things are najis (impure)?", "a": "- Human urine\n- Human faeces\n- Blood. A tiny amount is overlooked. The blood that flows at slaughter is impure; the blood that stays in the meat and veins is pure, because it does not flow.\n- The urine and dung of every animal that is not permissible to eat\n- Predatory animals (as-sibāʿ) larger than a cat, such as lions and wolves. The cat itself is pure: \"It is not impure; it is among those who go around among you\" (Abu Dawud 75, Tirmidhi 92).\n- Dead animals, except dead humans and creatures without flowing blood. Dead fish and locusts are pure."}, {"q": "Is blood impure?", "a": "Yes. Scholars have reported consensus (ijmāʿ) that flowing blood is impure."}, {"q": "What is the ruling on dead animals (al-maytah)?", "a": "They are forbidden to eat and impure (except fish, locusts, and animals without flowing blood).\nحُرِّمَتْ عَلَيْكُمُ الْمَيْتَةُ وَالدَّمُ وَلَحْمُ الْخِنزِيرِ وَمَا أُهِلَّ لِغَيْرِ اللّٰهِ بِهِ وَالْمُنْخَنِقَةُ وَالْمَوْقُوذَةُ وَالْمُتَرَدِّيَةُ وَالنَّطِيحَةُ وَمَا أَكَلَ السَّبُعُ إِلَّا مَا ذَكَّيْتُمْ\n\"Prohibited to you are dead animals, blood, the flesh of swine, what has been dedicated to other than Allah, and animals killed by strangling, by a violent blow, by a headlong fall or by the goring of horns, and those a wild animal has eaten from, except what you are able to slaughter before its death.\" (al-Maʾidah 5:3)"}, {"q": "Where is wudu mentioned in the Qur'an?", "a": "يَا أَيُّهَا الَّذِينَ آمَنُوا إِذَا قُمْتُمْ إِلَى الصَّلَاةِ فَاغْسِلُوا وُجُوهَكُمْ وَأَيْدِيَكُمْ إِلَى الْمَرَافِقِ وَامْسَحُوا بِرُءُوسِكُمْ وَأَرْجُلَكُمْ إِلَى الْكَعْبَيْنِ ۚ وَإِن كُنتُمْ جُنُبًا فَاطَّهَّرُوا ۚ وَإِن كُنتُم مَّرْضَىٰ أَوْ عَلَىٰ سَفَرٍ أَوْ جَاءَ أَحَدٌ مِّنكُم مِّنَ الْغَائِطِ أَوْ لَامَسْتُمُ النِّسَاءَ فَلَمْ تَجِدُوا مَاءً فَتَيَمَّمُوا صَعِيدًا طَيِّبًا فَامْسَحُوا بِوُجُوهِكُمْ وَأَيْدِيكُم مِّنْهُ ۚ مَا يُرِيدُ اللّٰهُ لِيَجْعَلَ عَلَيْكُم مِّنْ حَرَجٍ وَلٰكِن يُرِيدُ لِيُطَهِّرَكُمْ وَلِيُتِمَّ نِعْمَتَهُ عَلَيْكُمْ لَعَلَّكُمْ تَشْكُرُونَ\n\"O you who have believed, when you rise for prayer, wash your faces and your forearms to the elbows, wipe over your heads, and wash your feet to the ankles. And if you are in a state of janābah, purify yourselves. But if you are ill, or on a journey, or one of you comes from relieving himself, or you have touched women and do not find water, then seek clean earth and wipe your faces and hands with it. Allah does not intend to make difficulty for you, but He intends to purify you and complete His favour upon you, that you may be grateful.\" (al-Maʾidah 5:6)"}, {"q": "How is the urine of a baby girl and a baby boy purified?", "a": "يُغْسَلُ مِنْ بَوْلِ الْجَارِيَةِ، وَيُرَشُّ مِنْ بَوْلِ الْغُلَامِ\n\"The urine of a baby girl is washed, and water is sprinkled on the urine of a baby boy.\" (Abu Dawud 376)\nThis applies to a boy who has not yet started eating food (Bukhari 223, Muslim 287, from Umm Qays)."}, {"q": "Describe al-madhy (pre-seminal fluid): its colour, consistency, when it comes out, and amount.", "a": "Colour: white, as an-Nawawi said; as-Sarḥān said it has no colour.\nConsistency: raqīq (light/thin) and lazij (sticky).\nWhen it comes out: at the time of desire, not when the desire finishes; you may not feel it.\nAmount: not a lot at once, and no fatigue after it."}, {"q": "Describe al-wady: its colour, consistency, when it comes out, and amount.", "a": "Colour: white with kudrah (cloudy), not pure white; sometimes yellowish.\nConsistency: thakhīn (thick), close to semen in density, with no smell.\nWhen it comes out: shortly after urinating, or when carrying something heavy.\nAmount: one drop or two."}, {"q": "What is required if madhy or wady comes out?", "a": "No ghusl, by consensus. Wash the private area and make wudu. The same applies to women.\nFor madhy, the Prophet ﷺ said: يَغْسِلُ ذَكَرَهُ وَيَتَوَضَّأُ \"He washes his private part and makes wudu.\" (Bukhari 269, Muslim 303, the hadith of ʿAli)"}, {"q": "What are an-naḍḥ, al-ghasl and ad-dalk?", "a": "An-naḍḥ: sprinkling (the same as rashsh). Water reaches the place but does not run off it.\nAl-ghasl: washing. Water reaches the area and runs off it.\nAd-dalk: washing with rubbing. The highest level."}, {"q": "Where is each level of washing applied: an-naḍḥ, al-ghasl, ad-dalk?", "a": "An-naḍḥ (sprinkling): the urine of a baby boy who has not yet eaten food, but not baby girls.\nAl-ghasl (washing): the washing in wudu, and what urine is purified with.\nAd-dalk (washing with rubbing): e.g. ḥayḍ (menstrual) blood when it will not come out."}]}, {"name": "The Principles of Jurisprudence", "cards": [{"q": "What is al-manāṭ?", "a": "Al-manāṭ is the reason (basis) a ruling is tied to.\nExample from the poem: the principle that certainty is not removed by mere doubt."}, {"q": "What is the proof that certainty is not removed by mere doubt?", "a": "الْيَقِينُ لَا يَزُولُ بِالشَّكِّ \"Certainty is not removed by doubt.\"\nAbout someone who feels something in his prayer, the Prophet ﷺ said:\nلَا يَنْصَرِفْ حَتَّى يَسْمَعَ صَوْتًا أَوْ يَجِدَ رِيحًا\n\"He should not leave (his salah) unless he hears a sound or finds a smell.\" (Bukhari 137, Muslim 361, from ʿAbdullah ibn Zayd)"}, {"q": "Whose words do we accept completely?", "a": "Only the Prophet ﷺ. Everyone else's words are accepted or rejected.\nكُلُّ أَحَدٍ يُؤْخَذُ مِنْ قَوْلِهِ وَيُتْرَكُ إِلَّا صَاحِبَ هٰذَا الْقَبْرِ ﷺ\n\"Everyone's words may be taken or left, except the one in this grave ﷺ.\" This saying is famously attributed to Imam Malik; Imam Ahmad held the same meaning."}, {"q": "When do you reach the pinnacle of knowledge?", "a": "Trick question. Whoever thinks he has reached the pinnacle of knowledge has reached its lowest pit, and is arrogant in the religion."}, {"q": "Is Islamic knowledge inherited?", "a": "Yes. Islamic knowledge is inherited in this ummah. The religion is never forgotten, and the truth will prevail until the Day of Judgement.\nلَا تَزَالُ طَائِفَةٌ مِنْ أُمَّتِي ظَاهِرِينَ عَلَى الْحَقِّ\n\"A group of my ummah will always remain upon the truth, prevailing.\" (Muslim 1920)\nإِنَّ الْعُلَمَاءَ وَرَثَةُ الْأَنْبِيَاءِ\n\"The scholars are the heirs of the prophets.\" (Abu Dawud 3641, Tirmidhi 2682)\nAttributing knowledge to the one who said it is part of the religion. Be careful of saying something no one from the Salaf said or acted upon. Imam Ahmad: \"Beware of speaking on an issue in which you have no imam (predecessor).\""}]}, {"name": "The Six Fundamental Principles", "cards": []}, {"name": "The Ta’iyyah of al-Ilbīrī", "cards": []}, {"name": "The Three Fundamental Principles", "cards": [{"q": "What causes knowledge (ʿilm) to leave you?", "a": "Arguing (disputing to win) causes knowledge to leave you."}, {"q": "What are the four matters obligatory upon every Muslim? What is the proof?", "a": "1. Seeking knowledge\n2. Acting upon it\n3. Calling to it\n4. Being patient with the harm that comes while upon it\nThe proof is Surah al-ʿAsr:\nوَالْعَصْرِ ۝ إِنَّ الْإِنسَانَ لَفِي خُسْرٍ ۝ إِلَّا الَّذِينَ آمَنُوا وَعَمِلُوا الصَّالِحَاتِ وَتَوَاصَوْا بِالْحَقِّ وَتَوَاصَوْا بِالصَّبْرِ\n\"By time, indeed mankind is in loss, except those who believe, do righteous deeds, advise each other to truth, and advise each other to patience.\" (al-ʿAsr 103:1–3)\nImam ash-Shafiʿi said: \"Had Allah sent down no proof to His creation other than this surah, it would have been sufficient for them.\""}, {"q": "What are the three kinds of patience?", "a": "1. Patience upon obedience to Allah عز وجل, e.g. upon the salah, going to the masjid, fasting.\n2. Patience in staying away from disobedience to Allah عز وجل, e.g. holding back from looking at something ḥarām.\n3. Patience with the painful decrees of Allah سبحانه وتعالى."}, {"q": "How should we worship Allah?", "a": "Not in the way we want to worship Him, but in the way He سبحانه وتعالى wants to be worshipped.\n\"Do not go against the Sunnah, even by one step.\" (Ibn Baz, as quoted in class)\nمَنْ عَمِلَ عَمَلًا لَيْسَ عَلَيْهِ أَمْرُنَا فَهُوَ رَدٌّ\n\"Whoever does an action that is not in accordance with our matter, it is rejected.\" (Muslim 1718)"}, {"q": "What are the two types of duʿāʾ?", "a": "1. Duʿāʾ al-masʾalah (duʿāʾ of asking): asking for something; what people generally call duʿāʾ, e.g. \"O Allah, forgive me.\"\n2. Duʿāʾ al-ʿibādah (duʿāʾ of worship): the act of worship itself, done hoping for the reward, as though you have asked Allah to accept it (e.g. praying or fasting). You do not have to say anything; you do the worship and hope that Allah سبحانه وتعالى accepts it.\nالدُّعَاءُ هُوَ الْعِبَادَةُ\n\"Duʿāʾ is worship.\" (Abu Dawud 1479, Tirmidhi 2969)"}, {"q": "What is the proof that the masjids are for Allah alone?", "a": "وَأَنَّ الْمَسَاجِدَ لِلّٰهِ فَلَا تَدْعُوا مَعَ اللّٰهِ أَحَدًا\n\"And the masjids are for Allah, so do not invoke anyone along with Allah.\" (al-Jinn 72:18)"}]}];
+const COLORS = ["#2a9d8f","#e9c46a","#f4a261","#e76f51","#457b9d","#8ab17d","#b5838d","#6d597a","#52796f","#dda15e"];
+
+// ---------- storage ----------
+let state;
+function uid(){ return Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(-4); }
+function fromStarter(){
+  return { decks: STARTER.map(d => ({ id: uid(), name: d.name,
+    cards: d.cards.map(c => ({ id: uid(), q: c.q, a: c.a, w: 1, got: 0, miss: 0 })) })),
+    current: null, session: { good: 0, bad: 0 }, layout: 4,
+    seenStarter: STARTER.flatMap(d => d.cards.map(c => c.q)) };
+}
+// Adds built-in cards this browser hasn't been given yet (so new batches arrive with each update),
+// without re-adding cards the user deleted or duplicating ones already present.
+function addNewStarter(s){
+  try {
+    const seen = new Set(s.seenStarter || []);
+    STARTER.forEach(sd => sd.cards.forEach(c => {
+      if (seen.has(c.q)) return;
+      let d = s.decks.find(x => x.name === sd.name);
+      if (!d){ d = { id: uid(), name: sd.name, cards: [] }; s.decks.push(d); }
+      if (!d.cards.some(x => x.q === c.q)) d.cards.push({ id: uid(), q: c.q, a: c.a, w: 1, got: 0, miss: 0 });
+      seen.add(c.q);
+    }));
+    s.seenStarter = Array.from(seen);
+  } catch(e){ console.error("[Wheel:addNewStarter]", e); }
+  return s;
+}
+function migrate(s){ return addNewStarter(migrateOld(s)); }
+// Layout 2: one deck per course. Merge old "Important Lessons L1..L6" decks (keeping progress) and add any missing course decks.
+const REMOVED = ["Hadith & Ayat (must memorise)", "Fatwa Scenarios"];
+const OLD_STARTER_Q = new Set(["\"Lā ilāha illā Allāh\" (and iman) consists of what three things?", "After the tashahhud, what is said for the Prophet ﷺ (meaning)?", "Are rinsing the mouth and nose obligatory in wudu?", "At which four points are the hands raised in the salah? How?", "Belief in Allah means believing in His existence and in which three types of Tawhid?", "Besides the seven destructive sins, what other major sins are listed in Lesson 17?", "Complete the hadith: \"That which I fear most for you is ...\" — and what is it explained as?", "Define Ihsan.", "Define a condition (shart) of an act of worship.", "Define a pillar (rukn) of an act of worship.", "Define an obligation (wajib) of the salah.", "Define the four things we avoid in Allah's Names and Attributes: taḥrīf, taʿṭīl, takyīf, tamthīl.", "Describe the janazah prayer.", "Does speaking out of forgetfulness or ignorance invalidate the salah?", "Does touching a woman nullify wudu?", "Does vomiting nullify wudu (as in your notes)?", "Does washing a dead body nullify wudu?", "Does waswas (whispers) contradict the condition of yaqīn (certainty)?", "Give examples of major shirk.", "Give the meaning of the sunnah duʿaʾ in your notes for after the tashahhud (remember, thank, worship...).", "How deep should the grave be (as in your notes)?", "How does one sit in the first tashahhud and between the two prostrations?", "How does one sit in the last tashahhud of a 3 or 4 rakʿah prayer?", "How does seeking knowledge relate to manners?", "How long may a woman mourn?", "How many movements do some scholars say break the salah?", "How many pieces of white cloth are used to shroud a man and a woman?", "How many sunnah acts of the salah are in your notes? Name as many as you can.", "How many ʿUmrahs and how many Hajj did the Prophet ﷺ perform?", "How often is Hajj obligatory?", "How should the private parts be cleaned after using the toilet?", "If food is stuck between your teeth during salah, what do you do?", "If someone makes wudu with stolen water, is it valid?", "If your phone rings during salah, what should you do?", "Ikhlāṣ (sincerity) — what does this condition negate?", "In which prayers is the recitation aloud?", "In which prayers is the recitation quiet?", "Inqiyād (submission) — what does this condition negate?", "Is takbirat al-ihram an obligation (wajib) or a pillar (rukn)?", "Is zakah due on the house you live in and the car you use? On money saved for a house?", "List the 10 conditions of wudu.", "List the 14 pillars (arkan) of the salah.", "List the 6 nullifiers of wudu.", "List the 6 obligatory acts (furud) of wudu.", "List the 8 nullifiers of the salah.", "List the 8 obligations (wajibat) of the salah.", "List the 9 conditions (shurut) of the salah.", "List the conditions of \"Lā ilāha illā Allāh\" (8, plus the 9th sometimes mentioned).", "May a man mourn (observe ihdad) for relatives?", "May someone who missed the janazah pray it after burial? Is there a limit?", "May the family of the deceased make food for people? Why?", "Maḥabbah (love) — what does this condition negate?", "Name the children of the Prophet ﷺ (7).", "Name the seven battles the Prophet ﷺ fought in (as in your notes).", "Name the wives of the Prophet ﷺ (as in your notes).", "Order the sins from least to most serious (as in your notes).", "Qabūl (acceptance) — what does this condition negate?", "Removing najasah for the salah requires purity of which three things?", "Summarise how the deceased is washed (as in your notes).", "What are the manners of eating and drinking?", "What are the remaining pillars of Islam after the Shahadah?", "What are the seven limbs of sujud?", "What are the six pillars of Iman?", "What did the Prophet ﷺ say about swearing by other than Allah?", "What did the Prophet ﷺ teach us to say instead of \"What Allah wills and so-and-so wills\"?", "What do scholars sometimes combine \"removing hadath\" and \"removing najasah\" into?", "What do you do if you are in doubt during the salah (e.g. how many rakʿahs you prayed)?", "What does \"continuing the intention\" mean for wudu? What about someone with waswas?", "What does belief in the Last Day encompass?", "What does someone with a continuous condition (e.g. constant urine or bleeding) do for wudu?", "What does tumaʾninah include besides calmness in each position (as in your notes)?", "What does ʿabd mean, and is it a low status?", "What is said by the one who sneezes, and by the one who hears him?", "What is said in rukuʿ, in sujud, and between the two prostrations?", "What is tamyiz, and at what age do some scholars place it?", "What is the 1st lesson for every Muslim?", "What is the difference between Islam and Iman?", "What is the difference between major and minor hadath?", "What is the greatest of the five pillars of Islam?", "What is the meaning of the tashahhud?", "What is the order of what is said in the final sitting (as in your notes)?", "What is the rate of zakah, and how often is it paid?", "What is the ruling on men visiting the graves, and why?", "What is the ruling on not paying zakah?", "What is the ruling on the one who commits minor shirk?", "What is the ruling on women visiting the graves?", "What is the sunnah for the elbows, belly and thighs in sujud?", "What is the sunnah for the index finger in the tashahhud?", "What is the sunnah regarding the number of washes and the side to start with in wudu?", "What should be done for someone who is dying?", "What should be done once death is confirmed?", "When can sujud as-sahw be done?", "Where does the imam stand for a male and for a female deceased?", "Which Islamic qualities should a Muslim adorn himself with (Lesson 15)?", "Which are the emphasised sunnah prayers (rawatib) in your notes?", "Which duʿaʾ after the final tashahhud is sunnah but so important that some of the salaf said it is obligatory? Give its meaning.", "Which pillar is sawm, and what is its purpose?", "Which points in wudu did your notes mark as having a difference of opinion?", "Which quote on knowledge and manners is in your notes, and who said it?", "Who are the Ulul-ʿAzm (the messengers of firm resolve)?", "Who has the most right to wash, lead the prayer over, and bury the deceased?", "Who is not washed and not prayed upon?", "Who says \"Samiʿa Allahu liman hamidah\", and who says \"Rabbana wa laka al-hamd\"?", "Why does deep sleep nullify wudu? What else is included?", "Why is Tawhid the best of manners?", "Why must nail polish be removed before wudu?", "Yaqīn (certainty) — what does this condition negate?", "ʿIlm (knowledge) — what does this condition negate?", "Ṣidq (truthfulness) — what does this condition negate?", "🔴 What does \"Muḥammad Rasūl Allāh\" entail?", "🟠 Define Tawhid al-Asmaʾ was-Sifat.", "🟠 Define Tawhid al-Uluhiyyah.", "🟠 Define Tawhid ar-Rububiyyah.", "🟠 List the seven destructive sins.", "🟠 What did your notes say about laughing in salah and about those around someone praying?", "🟠 What is riyāʾ, and how serious is it?", "🟠 Why do we need the Sunnah to understand the Qur'an?", "🟡 Define minor shirk and give examples.", "🟡 What is hidden shirk? Give an example.", "🟡 What is major shirk and what is its consequence?", "🟣 What are the two pillars (arkan) of \"Lā ilāha illā Allāh\"?", "🟣 Which ayah is the basis of affirming Allah's attributes without likening Him to creation? Give the reference."]);
+function dropStarterCards(s){ s.decks.forEach(d => { d.cards = d.cards.filter(c => !OLD_STARTER_Q.has(c.q)); }); s.layout = 4; return s; }
+function migrateOld(s){
+  try {
+    if (s.layout >= 4) return s;
+    if (s.layout === 3) return dropStarterCards(s);
+    if (s.layout === 2){ s.decks = s.decks.filter(d => !REMOVED.includes(d.name)); return dropStarterCards(s); }
+    const IL = "The Important Lessons For Every Muslim";
+    const old = s.decks.filter(d => /^Important Lessons L\d+$/.test(d.name));
+    if (old.length){
+      let target = s.decks.find(d => d.name === IL);
+      if (!target){ target = { id: uid(), name: IL, cards: [] }; s.decks.splice(s.decks.indexOf(old[0]), 0, target); }
+      old.forEach(d => { target.cards.push(...d.cards); if (s.current === d.id) s.current = target.id; });
+      s.decks = s.decks.filter(d => !old.includes(d));
+    }
+    const names = new Set(s.decks.map(d => d.name));
+    fromStarter().decks.forEach(d => { if (!names.has(d.name)) s.decks.push(d); });
+    s.decks = s.decks.filter(d => !REMOVED.includes(d.name));
+    dropStarterCards(s);
+  } catch(e){ console.error("[Wheel:migrate]", e); }
+  return s;
+}
+function load(){
+  try { const raw = localStorage.getItem(KEY); if (raw) { const s = JSON.parse(raw); if (s && Array.isArray(s.decks)) return migrate(s); } }
+  catch(e){ console.error("[Wheel:load]", e); }
+  return fromStarter();
+}
+function save(){
+  try { localStorage.setItem(KEY, JSON.stringify(state)); }
+  catch(e){ console.error("[Wheel:save]", e); alert("Could not save — your browser may be blocking storage (private mode?). Use Download backup to keep your cards."); }
+}
+state = load();
+if (!state.session) state.session = { good: 0, bad: 0 };
+if (!state.current || !state.decks.find(d => d.id === state.current)) state.current = state.decks[0] ? state.decks[0].id : null;
+save();
+
+const $ = id => document.getElementById(id);
+const deck = () => state.decks.find(d => d.id === state.current);
+
+// ---------- tabs ----------
+document.querySelectorAll(".tab").forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll(".tab").forEach(x => x.classList.toggle("active", x === b));
+  ["spin","manage","data"].forEach(t => $("tab-"+t).classList.toggle("hidden", t !== b.dataset.tab));
+  renderAll();
+}));
+
+// ---------- deck selects ----------
+function fillSelect(sel, withNew){
+  sel.innerHTML = "";
+  if (withNew){ const o = document.createElement("option"); o.value = ""; o.textContent = "A new deck per file"; sel.appendChild(o); }
+  state.decks.forEach(d => { const o = document.createElement("option"); o.value = d.id; o.textContent = d.name + " (" + d.cards.length + ")"; sel.appendChild(o); });
+  if (!withNew && state.current) sel.value = state.current;
+}
+function renderAll(){ fillSelect($("deckSelect")); fillSelect($("mDeck")); fillSelect($("impDeck"), true); drawWheel(); renderCards(); renderScore(); }
+$("deckSelect").addEventListener("change", e => { state.current = e.target.value; save(); resetQ(); renderAll(); });
+$("mDeck").addEventListener("change", e => { state.current = e.target.value; save(); cancelEdit(); renderAll(); });
+
+// ---------- wheel ----------
+const cv = $("wheel"), ctx = cv.getContext("2d");
+let rotation = 0, spinning = false, currentCard = null;
+function slices(){
+  const d = deck(); if (!d || !d.cards.length) return [];
+  const total = d.cards.reduce((s,c) => s + c.w, 0); let a = 0;
+  return d.cards.map((c,i) => { const span = c.w / total * Math.PI * 2; const s = { card: c, i, start: a, end: a + span }; a += span; return s; });
+}
+function drawWheel(){
+  const S = slices(), R = cv.width/2;
+  ctx.clearRect(0,0,cv.width,cv.height);
+  if (!S.length){
+    ctx.fillStyle = "#ccc"; ctx.beginPath(); ctx.arc(R,R,R-4,0,Math.PI*2); ctx.fill();
+    $("wheelNote").textContent = "This deck has no cards yet — add some in the Cards tab."; $("spinBtn").disabled = true; return;
+  }
+  $("spinBtn").disabled = false;
+  const showText = S.length <= 16;
+  S.forEach((s,k) => {
+    ctx.beginPath(); ctx.moveTo(R,R);
+    // angles measured clockwise from the top (pointer)
+    ctx.arc(R,R,R-4, s.start - Math.PI/2, s.end - Math.PI/2); ctx.closePath();
+    ctx.fillStyle = COLORS[k % COLORS.length]; ctx.fill();
+    ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 3; ctx.stroke();
+    const mid = (s.start + s.end)/2 - Math.PI/2, span = s.end - s.start;
+    if (span < 0.06) return;
+    ctx.save(); ctx.translate(R,R); ctx.rotate(mid);
+    ctx.fillStyle = "#14181c"; ctx.textAlign = "right"; ctx.textBaseline = "middle";
+    const fs = Math.max(16, Math.min(30, span * 180)); ctx.font = "600 " + fs + "px Inter, sans-serif";
+    let label = String(s.i + 1);
+    if (showText){ let t = s.card.q.replace(/\s+/g," "); if (t.length > 22) t = t.slice(0,21) + "…"; label = (s.i+1) + ". " + t; }
+    ctx.fillText(label, R - 22, 0); ctx.restore();
+  });
+  ctx.beginPath(); ctx.arc(R,R,R-4,0,Math.PI*2); ctx.strokeStyle = "#14181c"; ctx.lineWidth = 6; ctx.stroke();
+  const missed = deck().cards.filter(c => c.w > 1).length;
+  $("wheelNote").textContent = S.length + " cards" + (missed ? " · " + missed + " you've missed have bigger slices" : "") + (showText ? "" : " · slices show card numbers");
+}
+function pickWeighted(){
+  const S = slices(); const total = S.reduce((s,x) => s + (x.end - x.start), 0);
+  let r = Math.random() * total;
+  for (const s of S){ r -= (s.end - s.start); if (r <= 0) return s; }
+  return S[S.length - 1];
+}
+function spin(){
+  if (spinning) return; const S = slices(); if (!S.length) return;
+  resetQ(); spinning = true; $("spinBtn").disabled = true;
+  const s = pickWeighted();
+  // land somewhere inside the slice, not on its edge
+  const inside = s.start + (s.end - s.start) * (0.2 + Math.random() * 0.6);
+  const current = ((rotation % 360) + 360) % 360;
+  let target = (360 - inside * 180 / Math.PI) % 360;      // wheel angle that puts `inside` under the pointer
+  let delta = target - current; if (delta < 0) delta += 360;
+  rotation += 360 * 5 + delta;
+  cv.style.transform = "rotate(" + rotation + "deg)";
+  setTimeout(() => { spinning = false; $("spinBtn").disabled = false; showQ(s.card, s.i); }, 4300);
+}
+$("spinBtn").addEventListener("click", spin);
+$("hub").addEventListener("click", spin);
+
+// ---------- question flow ----------
+function resetQ(){ currentCard = null; $("qPanel").classList.add("hidden"); $("revealBox").classList.add("hidden"); $("myAnswer").value = ""; }
+function showQ(card, i){
+  currentCard = card;
+  $("qMeta").textContent = deck().name + " · card " + (i+1) + (card.miss ? " · missed " + card.miss + "×" : "");
+  $("qText").textContent = card.q; renderAnswer($("aText"), card.a);
+  $("myAnswer").value = ""; $("revealBox").classList.add("hidden"); $("revealBtn").disabled = false;
+  $("qPanel").classList.remove("hidden"); $("qPanel").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+// Lines that are fully Arabic (no Latin letters) are shown larger, in an Arabic font, right-to-left.
+function renderAnswer(el, text){
+  el.textContent = "";
+  text.split("\n").forEach(line => {
+    const div = document.createElement("div"); div.dir = "auto"; div.textContent = line || "\u00a0";
+    if (/[\u0600-\u06FF]/.test(line) && !/[A-Za-z]/.test(line)) div.className = "ar";
+    el.appendChild(div);
+  });
+}
+$("revealBtn").addEventListener("click", () => {
+  const mine = $("myAnswer").value.trim();
+  $("yourAns").textContent = mine ? "Your answer: " + mine : "";
+  $("revealBox").classList.remove("hidden"); $("revealBtn").disabled = true;
+});
+function grade(ok){
+  if (!currentCard) return;
+  if (ok){ currentCard.got++; currentCard.w = Math.max(1, currentCard.w - 1); state.session.good++; }
+  else { currentCard.miss++; currentCard.w = Math.min(6, currentCard.w + 2); state.session.bad++; }
+  save(); resetQ(); renderAll(); window.scrollTo({ top: 0, behavior: "smooth" });
+}
+$("gotBtn").addEventListener("click", () => grade(true));
+$("missBtn").addEventListener("click", () => grade(false));
+function renderScore(){
+  const g = state.session.good, b = state.session.bad;
+  $("sGood").textContent = g; $("sBad").textContent = b;
+  $("sPct").textContent = (g + b) ? Math.round(g / (g + b) * 100) + "%" : "";
+}
+$("resetScore").addEventListener("click", () => { state.session = { good: 0, bad: 0 }; save(); renderScore(); });
+
+// ---------- decks ----------
+$("newDeck").addEventListener("click", () => {
+  const n = (prompt("Name of the new deck:") || "").trim(); if (!n) return;
+  const d = { id: uid(), name: n, cards: [] }; state.decks.push(d); state.current = d.id; save(); renderAll();
+});
+$("renameDeck").addEventListener("click", () => {
+  const d = deck(); if (!d) return; const n = (prompt("Rename deck:", d.name) || "").trim(); if (!n) return;
+  d.name = n; save(); renderAll();
+});
+$("delDeck").addEventListener("click", () => {
+  const d = deck(); if (!d) return;
+  if (!confirm('Delete the deck "' + d.name + '" and its ' + d.cards.length + " cards? This cannot be undone.")) return;
+  state.decks = state.decks.filter(x => x !== d); state.current = state.decks[0] ? state.decks[0].id : null; save(); renderAll();
+});
+
+// ---------- cards ----------
+let editing = null;
+$("saveCard").addEventListener("click", () => {
+  const q = $("fQ").value.trim(), a = $("fA").value.trim();
+  if (!q || !a){ alert("Please fill in both the question and the answer."); return; }
+  let d = deck();
+  if (!d){ d = { id: uid(), name: "My deck", cards: [] }; state.decks.push(d); state.current = d.id; }
+  if (editing){ editing.q = q; editing.a = a; } else d.cards.push({ id: uid(), q, a, w: 1, got: 0, miss: 0 });
+  save(); cancelEdit(); renderAll();
+});
+function cancelEdit(){ editing = null; $("fQ").value = ""; $("fA").value = ""; $("formTitle").textContent = "Add a card"; $("saveCard").textContent = "Add card"; $("cancelEdit").classList.add("hidden"); }
+$("cancelEdit").addEventListener("click", cancelEdit);
+$("search").addEventListener("input", renderCards);
+function renderCards(){
+  const d = deck(), ul = $("cardList"); ul.innerHTML = "";
+  if (!d){ $("cardCount").textContent = "No decks yet — create one."; return; }
+  const term = $("search").value.trim().toLowerCase();
+  const list = d.cards.map((c,i) => [c,i]).filter(([c]) => !term || (c.q + " " + c.a).toLowerCase().includes(term));
+  $("cardCount").textContent = list.length + " of " + d.cards.length + " cards";
+  list.forEach(([c,i]) => {
+    const li = document.createElement("li");
+    const q = document.createElement("div"); q.className = "cq bidi"; q.dir = "auto"; q.textContent = (i+1) + ". " + c.q;
+    const a = document.createElement("div"); a.className = "ca bidi"; a.dir = "auto"; a.textContent = c.a;
+    const meta = document.createElement("div"); meta.className = "row"; meta.style.marginTop = "6px";
+    const pill = document.createElement("span"); pill.className = "pill"; pill.style.flex = "0 0 auto"; pill.textContent = "✅ " + c.got + "  ❌ " + c.miss;
+    const eb = document.createElement("button"); eb.textContent = "Edit";
+    eb.onclick = () => { editing = c; $("fQ").value = c.q; $("fA").value = c.a; $("formTitle").textContent = "Edit card " + (i+1); $("saveCard").textContent = "Save changes"; $("cancelEdit").classList.remove("hidden"); $("fQ").scrollIntoView({ behavior: "smooth", block: "center" }); };
+    const db = document.createElement("button"); db.textContent = "Delete";
+    db.onclick = () => { if (!confirm("Delete this card?")) return; d.cards = d.cards.filter(x => x !== c); if (editing === c) cancelEdit(); save(); renderAll(); };
+    const spacer = document.createElement("span");
+    meta.append(pill, spacer, eb, db); li.append(q, a, meta); ul.appendChild(li);
+  });
+}
+
+// ---------- Obsidian import ----------
+function parseMd(text){
+  const cards = [];
+  text = text.replace(/\r\n?/g, "\n").replace(/<!--SR:[^>]*-->/g, "");
+  text = text.replace(/^---\n[\s\S]*?\n---\n/, "");             // YAML front matter
+  const blocks = text.split(/\n\s*\n/);
+  for (const b of blocks){
+    const lines = b.split("\n").filter(l => !/^\s*#flashcards\S*\s*$/.test(l) && !/^\s*#{1,6}\s/.test(l) && !/^\s*Source:/i.test(l));
+    if (!lines.length) continue;
+    const qi = lines.findIndex(l => /^\s*\?{1,2}\s*$/.test(l));
+    if (qi > 0){
+      const q = lines.slice(0, qi).join("\n").trim(), a = lines.slice(qi + 1).join("\n").trim();
+      if (q && a) cards.push({ q, a }); continue;
+    }
+    for (const l of lines){
+      const m = l.match(/^(.*?):{2,3}(.*)$/);
+      if (m && m[1].trim() && m[2].trim()) cards.push({ q: m[1].trim(), a: m[2].trim() });
+    }
+  }
+  return cards;
+}
+$("mdFiles").addEventListener("change", async e => {
+  const files = Array.from(e.target.files || []); if (!files.length) return;
+  let total = 0, made = 0; const target = $("impDeck").value;
+  try {
+    for (const f of files){
+      const cards = parseMd(await f.text()); if (!cards.length) continue;
+      let d = target ? state.decks.find(x => x.id === target) : null;
+      if (!d){ d = { id: uid(), name: f.name.replace(/\.(md|txt)$/i, ""), cards: [] }; state.decks.push(d); made++; }
+      const seen = new Set(d.cards.map(c => c.q));
+      cards.forEach(c => { if (!seen.has(c.q)){ d.cards.push({ id: uid(), q: c.q, a: c.a, w: 1, got: 0, miss: 0 }); seen.add(c.q); total++; } });
+    }
+    save(); renderAll();
+    $("impMsg").textContent = "Imported " + total + " new card(s)" + (made ? " into " + made + " new deck(s)" : "") + ". Duplicates were skipped.";
+  } catch(err){ console.error("[Wheel:import]", err); $("impMsg").textContent = "Sorry, that file couldn't be read."; }
+  e.target.value = "";
+});
+
+// ---------- backup ----------
+$("exportBtn").addEventListener("click", () => {
+  const blob = new Blob([JSON.stringify(state, null, 1)], { type: "application/json" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+  a.download = "flashcard-wheel-backup-" + new Date().toISOString().slice(0,10) + ".json";
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  $("bkMsg").textContent = "Backup downloaded.";
+});
+$("restoreFile").addEventListener("change", async e => {
+  const f = e.target.files && e.target.files[0]; if (!f) return;
+  try {
+    const s = JSON.parse(await f.text());
+    if (!s || !Array.isArray(s.decks)) throw new Error("not a backup");
+    if (!confirm("Replace everything on this device with this backup?")) return;
+    state = migrate(s); if (!state.session) state.session = { good: 0, bad: 0 };
+    if (!state.decks.find(d => d.id === state.current)) state.current = state.decks[0] ? state.decks[0].id : null;
+    save(); renderAll(); $("bkMsg").textContent = "Backup restored.";
+  } catch(err){ console.error("[Wheel:restore]", err); $("bkMsg").textContent = "That file isn't a Flashcard Wheel backup."; }
+  e.target.value = "";
+});
+$("resetProgress").addEventListener("click", () => {
+  if (!confirm("Reset got/missed counts and slice sizes for every card?")) return;
+  state.decks.forEach(d => d.cards.forEach(c => { c.w = 1; c.got = 0; c.miss = 0; })); state.session = { good: 0, bad: 0 };
+  save(); renderAll(); $("rsMsg").textContent = "Progress reset.";
+});
+$("restoreStarter").addEventListener("click", () => {
+  const fresh = fromStarter(); let added = 0;
+  fresh.decks.forEach(fd => { if (!state.decks.find(d => d.name === fd.name)){ state.decks.push(fd); added++; } });
+  if (!state.current && state.decks[0]) state.current = state.decks[0].id;
+  save(); renderAll(); $("rsMsg").textContent = added ? "Added back " + added + " starter deck(s)." : "All starter decks are already here.";
+});
+
+renderAll();
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(drawWheel);
+})();
+</script>
+</body>
+</html>
