@@ -88,7 +88,7 @@ label{display:block;font-weight:600;margin:10px 0 4px}
         <div class="hub" id="hub">SPIN</div>
       </div>
       <p class="muted center" id="wheelNote"></p>
-      <div class="center"><button class="primary" id="spinBtn" style="padding:12px 40px;font-size:1.1rem">Spin</button></div>
+      <div class="center row" style="justify-content:center"><button class="primary" id="spinBtn" style="padding:12px 40px;font-size:1.1rem">Spin</button><button id="randomDeckBtn" style="padding:12px 20px;font-size:1.1rem">🎲 Random deck</button></div>
     </div>
 
     <div class="panel hidden" id="qPanel">
@@ -302,7 +302,7 @@ function pickWeighted(){
 }
 function spin(){
   if (spinning) return; const S = slices(); if (!S.length) return;
-  resetQ(); spinning = true; $("spinBtn").disabled = true;
+  resetQ(); spinning = true; $("spinBtn").disabled = true; $("randomDeckBtn").disabled = true;
   const s = pickWeighted();
   // land somewhere inside the slice, not on its edge
   const inside = s.start + (s.end - s.start) * (0.2 + Math.random() * 0.6);
@@ -311,10 +311,22 @@ function spin(){
   let delta = target - current; if (delta < 0) delta += 360;
   rotation += 360 * 5 + delta;
   cv.style.transform = "rotate(" + rotation + "deg)";
-  setTimeout(() => { spinning = false; $("spinBtn").disabled = false; showQ(s.card, s.i); }, 4300);
+  setTimeout(() => { spinning = false; $("spinBtn").disabled = false; $("randomDeckBtn").disabled = false; showQ(s.card, s.i); }, 4300);
 }
 $("spinBtn").addEventListener("click", spin);
 $("hub").addEventListener("click", spin);
+// Random deck: choose uniformly among decks that have at least one card, switch to it, then spin.
+$("randomDeckBtn").addEventListener("click", () => {
+  try {
+    if (spinning) return;
+    const eligible = state.decks.filter(d => Array.isArray(d.cards) && d.cards.length >= 1);
+    if (!eligible.length){ $("wheelNote").textContent = "No deck has any cards yet. Add some in the Cards tab."; return; }
+    const d = eligible[Math.floor(Math.random() * eligible.length)];
+    state.current = d.id; save(); resetQ(); renderAll();
+    $("wheelNote").textContent = "🎲 Random deck: " + d.name + " · " + $("wheelNote").textContent;
+    spin();
+  } catch(e){ console.error("[Wheel:randomDeck]", e); }
+});
 
 // ---------- question flow ----------
 function resetQ(){ currentCard = null; $("qPanel").classList.add("hidden"); $("revealBox").classList.add("hidden"); $("myAnswer").value = ""; }
